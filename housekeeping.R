@@ -84,6 +84,21 @@ df_total <- df_total %>%
 
 df_total <- df_total %>%
   mutate(Cognitive_Screening = coalesce(PANDA_gesamt, MMST))
+
+df_total <- df_total %>%
+ mutate(
+    # Derive MCI per group:
+    # - controls: MMSE in [24, 27]
+    # - patients: PANDA in [15, 17]
+    MCI = case_when(
+      group == "control" & !is.na(MMST) & between(MMST, 24, 27)   ~ "yes",
+      group == "control" & !is.na(MMST)                            ~ "no",
+      group == "patient" & !is.na(PANDA_gesamt) & between(PANDA_gesamt, 15, 17)  ~ "yes",
+      group == "patient" & !is.na(PANDA_gesamt)                           ~ "no",
+      TRUE                                                         ~ NA_character_
+    ),
+    MCI = factor(MCI, levels = c("no", "yes"))
+  )
   
   
 # --- 10. Initialize new columns for the DOT latencies ---  

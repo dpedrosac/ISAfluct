@@ -6,7 +6,8 @@ packages <- c(
   "ggplot2",
   "ggpubr",
   "patchwork",
-  "purrr",  
+  "purrr",
+  "rlang",
   "RColorBrewer",
   "tableone", 
   "tidyverse"

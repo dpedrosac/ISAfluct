@@ -1,8 +1,7 @@
 # This is code to analyse the ISAfluct data which was collected from 2020 - 2023
 # Code developed by David Pedrosa
 
-# Version 1.7 # 2024-30-12 # Code was proof-read and indentation was checked, comments added 
-# and minor bugs removed
+# Version 1.8 # 2025-13-11 # Final comments in the MS included and some bugs corrected.
 
 # Preamble
 # ==================================================================================================
@@ -24,7 +23,7 @@ df_total    <- bind_rows(df_patients, df_contr.subj)
 source("extract_latencies.R") # Function needed to extract latencies
 source("housekeeping.R")
 
-# Part 1: Create TableOne using [tableone] package for general results
+# Part 1: Create TableOne using [tableone] package for general results (Table 1)
 # ==================================================================================================
 # Create a copy of df_total for analysis
 df_tableone <- df_total
@@ -105,34 +104,68 @@ tableOne_df <- rbind(tableOne_df, blank_row)
 
 write.csv(
   tableOne_df, 
-  file = file.path(wdir, "results", "table2.general_results.v1.1.csv"), 
+  file = file.path(wdir, "results", "table1.general_results.v1.1.csv"), 
   row.names = FALSE
 )
 
-# Part 2: Create normative data
+# Part 2: Create normative data (Figure 1)
 # ==================================================================================================
 
 # 1) Prep: make age bins and tidy factors
+
+# df_total_prepped <- df_total %>%
+#  mutate(
+#    age_bin = cut(
+#      Alter,
+#      breaks = c(55, 64, 73, 89, Inf),
+#      labels = c("55–63", "63–72", "75–84", "85+"),
+#      right = FALSE
+#    ),
+#    Gender = recode(Geschlecht,
+#                        `0` = "female",
+#                        `1` = "male")
+#  ) %>%
+#  filter(!is.na(age_bin))
+
+qs <- quantile(df_total$Alter,
+               probs = seq(0, 1, length.out = 5),
+               na.rm = TRUE)
+
+qs_round <- round(qs)
+
+# Assign the ages to the equally distributed age-bins
 df_total_prepped <- df_total %>%
   mutate(
     age_bin = cut(
       Alter,
-      breaks = c(55, 65, 75, 85, Inf),
-      labels = c("55–64", "65–74", "75–84", "85+"),
+      breaks = qs_round,
+      include.lowest = TRUE,
       right = FALSE
     ),
-    Gender = recode(Geschlecht,
-                        `0` = "female",
-                        `1` = "male")
+    Gender = dplyr::recode(Geschlecht,
+                           `0` = "female",
+                           `1` = "male")
   ) %>%
   filter(!is.na(age_bin))
   
-# 2) Reusable plotting function (no hard-coding)
-plot_norm_box <- function(data, var) {
-  v <- ensym(var)
-  ylab <- as_name(v)
+# Renamne the factors/age-bins
+df_total_prepped <- df_total_prepped %>%
+  mutate(
+    age_bin = forcats::fct_relabel(age_bin, function(x) {
+      x <- gsub("\\[|\\(|\\)", "", x)
+      x <- gsub(",", "–", x)	
+      x
+    })
+  )
+  
+levels(df_total_prepped$age_bin) = c("49–65", "65–71", "71–79", "79–94") # dirty hack!!
 
-  # Global stats for dashed lines (entire data supplied to the function)
+# 2) Reusable plotting function
+plot_norm_box <- function(data, var) {
+  v <- rlang::ensym(var)
+  ylab <- rlang::as_name(v)
+
+  # Global stats
   stats <- data %>%
     summarise(
       mu = mean(!!v, na.rm = TRUE),
@@ -140,30 +173,51 @@ plot_norm_box <- function(data, var) {
       .groups = "drop"
     )
 
+  # n per age bin
+  n_labels <- data %>%
+    group_by(age_bin) %>%
+    summarise(
+      n = n(),
+      y = max(!!v, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+    label_y <- max(data[[ylab]], na.rm = TRUE) * 1.05
+
   ggplot(data, aes(x = age_bin, y = !!v, fill = Gender)) +
-    geom_boxplot(outlier.shape = 16, width = 0.7,
-                 position = position_dodge(width = 0.8)) +
+    geom_boxplot(
+      outlier.shape = 16,
+      width = 0.7,
+      position = position_dodge(width = 0.8),
+      alpha = 0.5
+    ) +
     geom_hline(yintercept = stats$mu + 2 * stats$sd, linetype = "dashed") +
     geom_hline(yintercept = stats$mu - 2 * stats$sd, linetype = "dashed") +
-    scale_fill_brewer(palette = "Set1") +   # use Set1 colors
-    labs(
-      x = "Age bin",
-      y = ylab,
-      fill = "Gender",
-      # title = paste0(ylab, " — nach Altersklasse und Geschlecht"),
-      # subtitle = "Gestrichelte Linien: globales Mittel ± 2 SD (über alle Gruppen)"
+
+    geom_text(
+      data = n_labels,
+      inherit.aes = FALSE,
+      aes(x = age_bin, y = label_y, label = paste0("n = ", n)),
+      vjust = -0.5,
+      size = 5
     ) +
-    theme_minimal(base_size = 12) +
+
+    scale_fill_brewer(palette = "Set1") +
+    labs(
+      x   = "Age bin",
+      y   = ylab,
+      fill = "Gender"
+    ) +
+    theme_minimal(base_size = 16) +
     theme(legend.position = "bottom")
 }
 
 # 3) Use it for both variables (no changes needed)
+p_latency <- plot_norm_box(df_total_prepped %>% filter(group=="control"), DOT_latency)
+p_score   <- plot_norm_box(df_total_prepped %>% filter(group=="control"), DOT_Klicks)
 
-p_latency <- plot_norm_box(df_total_prepped, DOT_latency)
-p_score   <- plot_norm_box(df_total_prepped, DOT_Klicks)
-
-p_latency <- p_latency + labs(y = "Latency for (ms)", title = "DOT latency")
-p_score   <- p_score + labs(y = "Count", title = "Opened doors before quitting")
+p_latency <- p_latency + labs(y = "Latency (in ms)", title = "DOT latency")
+p_score   <- p_score + labs(y = "Count (n)", title = "Opened doors before quitting")
 
 combined_plot <- (
   p_latency + p_score
@@ -180,7 +234,7 @@ combined_plot <- (
 
 print(combined_plot)
 
-output_path <- file.path(wdir, "results", "figure1.normativeData.v1.0.png")
+output_path <- file.path(wdir, "results", "figure2.normativeData.v1.0.png")
 ggsave(
   filename = output_path,
   plot = combined_plot,
@@ -192,7 +246,7 @@ ggsave(
 
 # Data for description in the manuscript
 
-df_total_prepped %>%
+normative_data <- df_total_prepped %>%
   group_by(group) %>%
   summarise(
     mean_latency = mean(DOT_latency, na.rm = TRUE),
@@ -217,7 +271,7 @@ t_res <- t.test(df_control$DOT_pE_latency,
 
 print(t_res)  
 
-# Part 3: Create repeated measures table
+# Part 3: Create repeated measures table and figure (suppl. Figure 1)
 # ==================================================================================================
 variables_repeated <- c("MDS_UPDRS_III", "ISA_m", "BIS", "DOT_Klicks", "DOT_latency", "Schmerz_VAS_Rang")
 
@@ -306,7 +360,7 @@ summary_tableRM <- summary_tableRM %>% # sort by [custom_order]
 # Save as CSV
 write.csv(
   summary_tableRM,
-  file = file.path(wdir, "results", "table3.repeated_measures.v1.0.csv"),
+  file = file.path(wdir, "results", "table2.repeated_measures.v1.0.csv"),
   row.names = FALSE
 )
 
@@ -424,7 +478,7 @@ ggsave(
 )
 
 
-# Part 3: Start with the DOT analyses (behaviour ISA)
+# Part 4: Start with the DOT analyses (see Figure 2) 
 # ==================================================================================================
 
 df_longISAb <- df_total %>% # Reshape to long format
@@ -639,7 +693,7 @@ plot2C <- ggplot() +
   ) +
   geom_errorbar(
     data = df_summary,
-    aes(x = Latency_Type, ymin = mean_latency - sem_latency, ymax = mean_latency + sem_latency, color = group),
+    aes(x = Latency_Type, ymin = mean_latency - sem_latency, ymax = mean_latency + sem_latency),
     width = 0.1, size =.5, alpha = .5
   ) +
   labs(
@@ -651,8 +705,8 @@ plot2C <- ggplot() +
   scale_color_brewer(palette = "Set1") +
   scale_x_discrete(
     labels = c(
-      "DOT_npE_latency" = "After positive answer", 
-      "DOT_pE_latency" = "After negative answer"
+      "DOT_npE_latency" = "After positive\n answer", 
+      "DOT_pE_latency" = "After negative\n answer"
     ),
     expand = expansion(mult = c(0.1, 0.1))
   ) +
@@ -667,12 +721,75 @@ plot2C <- ggplot() +
   )
 
 
+plot2C_box <- ggplot(
+  data = df_long,
+  aes(x = Latency_Type, y = Latency, fill = group)
+) +
+  
+  # --- Jittered raw data ---
+  geom_jitter(
+    aes(size = 2, alpha = 0.5),
+    position = position_jitterdodge(
+      jitter.width = 0.2,
+      dodge.width  = 0.7
+    ),
+    size = 1.8,
+    alpha = 0.5
+  ) +
+  
+  # --- Boxplots by group ---
+  geom_boxplot(
+    width = 0.6,
+    position = position_dodge(width = 0.7),
+    outlier.shape = NA,      # hide outliers because jitter already shows raw points
+    alpha = 0.5) +              # slight transparency so points are visible behind
+    
+    stat_summary(
+    fun = median, 
+    geom = "crossbar", 
+    position = position_dodge(.7),        # Match dodge width for alignment
+    width = 0.8,                          # Wider than the box
+    size = 1                              # Adjusted thickness
+  ) +
+
+  
+  labs(
+    title = "Latency Differences",
+    x = NULL,
+    y = "Latency [in msec.]"
+  ) +
+  
+  theme_minimal() +
+  
+  scale_fill_brewer(palette = "Set1") +
+  scale_color_brewer(palette = "Set1") +   # jitter uses color, box uses fill
+  
+  scale_x_discrete(
+    labels = c(
+      "DOT_npE_latency" = "After positive\n answer", 
+      "DOT_pE_latency"  = "After negativ\n answer"
+    ),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  
+  ylim(0, 6300) +
+  
+  theme(
+    plot.title   = element_text(hjust = 0.5, size = 18, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "none",
+    legend.title    = element_blank()
+  )
+
+
 df_plotRM <- df_total %>% 
 	select(Probanden_ID, group, DOT_latency_T1, DOT_latency_T2, DOT_latency_T3)
 
 variables <- c("DOT_latency")
 plot2D <- lapply(variables, function(var) create_subplot(variable_name = var, df = df_plotRM))
-plot2D[[1]]$labels$title <- "DOT results for PD patients"
+plot2D[[1]]$labels$title <- "DOT results for PD-patients"
 plot2D[[1]]$labels$y <- "Latency [in msec.]"
 
 #combined_plot2 <- plot2A / (plot2B - plot2C) / (plot2D) + 
@@ -704,7 +821,7 @@ ggsave(
   dpi = 300
 )
 
-# Part 4: Final analyses (behaviour ISA)
+# Part 4: Correlation analyses (behaviour ISA)
 # ==================================================================================================
 
 ## Next level
@@ -860,7 +977,7 @@ plot4 <- plot4 +
     legend.key.width = unit(1, "cm")                        # Legend key width
   )
 
-output_path <- file.path(wdir, "results", "figure2.correlations.v1.0.png")
+output_path <- file.path(wdir, "results", "figure4.correlations.v1.0.png")
 ggsave(
   filename = output_path,
   plot = plot4,
@@ -873,7 +990,7 @@ ggsave(
 
 ## Stacked plots:
 variables <- c("PANDA_gesamt", "BIS_gesamt", "LEDD", "DAA")
-color_palette <- c("pE" = "black", "npE" = "black")
+color_palette <- c("punished" = "black", "rewarded" = "black")
 
 # Prepare data in long format for plotting
 df_long <- df_total %>%
@@ -884,7 +1001,7 @@ df_long <- df_total %>%
     values_to = "Latency"
   ) %>%
   mutate(
-    Latency_Type = recode(Latency_Type, DOT_pE_latency = "pE", DOT_npE_latency = "npE")
+    Latency_Type = recode(Latency_Type, DOT_pE_latency = "punished", DOT_npE_latency = "rewarded")
   )
 
 # Function to generate combined plots
@@ -919,14 +1036,15 @@ for (i in seq_along(variables)) {
 	is_right_column <- i %% 2 == 0
 
 y_axis_title_theme <- if (is_right_column) theme(axis.title.y = element_blank()) else theme()
+y_mid <- max(df_filtered$Latency, na.rm = TRUE) * 0.5
 
     # Create scatter plot with lm lines for both latency types
 plot <- ggplot(df_filtered, aes_string(x = var, y = "Latency", color = "Latency_Type", shape = "Latency_Type")) +
-  geom_point(alpha = 0.7, size = 3) +  # Different shapes based on Latency_Type
+  geom_point(alpha = 0.7, size = 5) +  # Different shapes based on Latency_Type
   geom_smooth(aes(linetype = Latency_Type), method = "lm", formula = y ~ x, se = FALSE, size = 1) +
   scale_color_manual(values = color_palette) +
-  scale_shape_manual(values = c("pE" = 16, "npE" = 17)) +  # Different shapes for pE and npE
-  scale_linetype_manual(values = c("pE" = "solid", "npE" = "dashed")) +
+  scale_shape_manual(values = c("punished" = 16, "rewarded" = 17)) +  # Different shapes for pE and npE
+  scale_linetype_manual(values = c("punished" = "solid", "rewarded" = "dashed")) +
   labs(
     title = paste(var, "vs Latency"),
     # x = var,
@@ -945,17 +1063,35 @@ plot <- ggplot(df_filtered, aes_string(x = var, y = "Latency", color = "Latency_
     cor_labels <- cor_results %>%
       mutate(label = paste0(Latency_Type, ": r = ", r_value, " ", significance))
     
-    plot <- plot +
-  	annotate(
-    "text",
-    x = Inf, y = Inf,
+ #   plot <- plot +
+ # 	annotate(
+ #   "text",
+ #   x = Inf, y = y_mid,
+ #   label = paste(cor_labels$label, collapse = "\n"),
+ #   hjust = 1.1, vjust = 1.1,
+ #   size = 6,
+ #   color = "black"
+ # 	)
+ #       
+
+plot <- plot +
+  annotate(
+    "label",
+    x = Inf,
+    y = y_mid,
     label = paste(cor_labels$label, collapse = "\n"),
-    hjust = 1.1, vjust = 1.1,
-    size = 4,
-    color = "black"
-  	)
-        
+    hjust = 1.1,
+    vjust = 0.5,
+    size = 6,
+    label.size = 0.5,        # thickness of the black border
+    label.r = unit(0.1, "lines"),  # corner rounding; set to 0 for sharp corners
+    color = "black",         # text color
+    fill = "white"           # box fill color
+  )
+
         plot <- plot + y_axis_title_theme
+
+
 
     # Append plot to list
     plots[[var]] <- plot
@@ -986,7 +1122,7 @@ plot4_combined <- wrap_plots(combined_plots, ncol = 2) +
 # wrap_plots(combined_plots, ncol = 2) + plot_layout(axis_titles='collect') + plot_annotation(tag_levels = 'A') & theme(plot.tag = element_text(face = 'bold', size=14))
 print(plot4_combined)
 
-output_path <- file.path(wdir, "results", "figure4.latencies_correlated.v1.0.png")
+output_path <- file.path(wdir, "results", "figure5.latencies_correlated.v1.0.png")
 ggsave(
   filename = output_path,
   plot = plot4_combined,

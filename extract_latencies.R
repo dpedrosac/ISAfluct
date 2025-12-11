@@ -1,4 +1,4 @@
-# This is code aims toi compute and retuurn mean latencies with outlier handling and filtering
+# This is code aims toi compute and return mean latencies with outlier handling and filtering
 # Code developed by David Pedrosa
 
 # Version 1.2 # 2024-29-12 # removed major bug, as valid values were not removed.
@@ -20,7 +20,7 @@ read_latency <- function(file_path) {
   data <- data[-c(1, nrow(data)), ]
   data <- data[!is.na(data$latency), ]
   
-  # Filter latencies (values >= 200 and within 3 * SD of the mean)
+  # Filter latencies (values >= 150 and within x * SD of the mean)
   mean_latency <- mean(data$latency)
   sd_latency <- sd(data$latency)
   data <- data[data$latency >= 150 & data$latency <= (mean_latency + 5 * sd_latency), ]
