@@ -1,24 +1,55 @@
-# This is code to analyse the ISAfluct data which was collected from 2020 - 2023
-# This part is required to clean up data and recode some variables
-# Code developed by David Pedrosa
+#!/usr/bin/env Rscript
+# =============================================================================
+# Script Name:  housekeeping.R
+# Purpose:      Some manual changes of variables to clean up the nomenclature
+# 		and to make it easier to follow.
+#
+# Author(s):    Jan-Philipp Bach, Dilara Bingöl, Andreas Mäckel,
+#		Franziska Maier, Josefine Waldthaler, David Pedrosa
+#		
+#
+# Notes:
+# - Project:    ISAfluct (2018–2026)
+# - Repository: https://github.com/dpedrosac/ISAfluct/
+#
+# Usage: 	source("scripts/housekeeping.R")
+# =============================================================================
 
-# Version 1.4 # 2024-28-12 # changed the results folder to make it universally valid
+df_patients_save <- df_patients # saves information
 
+# Helpers ----------------------------------------------------------------------
+
+to_num_comma <- function(x) {
+  # Convert strings like "1,23" to numeric 1.23
+  as.numeric(stringr::str_replace(as.character(x), ",", "."))
+}
+
+# ---- 1) Standardize subject IDs and rename BIS columns -----------------------
+
+rename_if_present <- function(data, old, new) {
+  if (old %in% names(data)) {
+    dplyr::rename(data, !!rlang::sym(new) := !!rlang::sym(old))
+  } else {
+    data
+  }
+}
 
 # --- 1. Rename IDs ---
 df_patients <- df_patients %>%
   mutate(subj_ID = Probanden_ID)
 
+# --- 2. Rename Columns ---	
+df_patients$BIS_T1=df_patients$BIS_1
+df_patients$BIS_T2=df_patients$BIS_2
+df_patients$BIS_T3=df_patients$BIS_3
+
+df_patients$BIS_attention=df_patients$BIS_1
+df_patients$BIS_motor=df_patients$BIS_2
+df_patients$BIS_non.planning=df_patients$BIS_3
+
+
 df_contr.subj <- df_contr.subj %>%
   mutate(subj_ID = Kontrollprobanden_ID_ISA_FLUCT)
-
-# --- 2. Rename Columns ---
-df_patients <- df_patients %>%
-  rename(
-    BIS_T1 = BIS_1,
-    BIS_T2 = BIS_2,
-    BIS_T3 = BIS_3
-  )
 
 # --- 3. Recode Time-Resolved Variables ---
 df_contr.subj <- df_contr.subj %>%
@@ -42,19 +73,23 @@ df_total <- df_total %>%
 
 # --- 6. Calculate Mean Scores ---
 df_total <- df_total %>%
+  rowwise() %>%
   mutate(
-    DOT_Score = ifelse(
+    DOT_Score = if_else(
       is.na(DOT_Score),
-      rowMeans(select(., DOT_Score_T1, DOT_Score_T2, DOT_Score_T3), na.rm = TRUE),
+      mean(c_across(c(DOT_Score_T1, DOT_Score_T2, DOT_Score_T3)), na.rm = TRUE),
       DOT_Score
     ),
-    DOT_Klicks = ifelse(
+    DOT_Klicks = if_else(
       is.na(DOT_Klicks),
-      rowMeans(select(., DOT_Klicks_T1, DOT_Klicks_T2, DOT_Klicks_T3), na.rm = TRUE),
+      mean(c_across(c(DOT_Klicks_T1, DOT_Klicks_T2, DOT_Klicks_T3)), na.rm = TRUE),
       DOT_Klicks
     ),
-    ISAm_total = rowMeans(select(., ISA_m_T1, ISA_m_T2, ISA_m_T3), na.rm = TRUE)
-  )
+    ISAm_total = mean(c_across(c(ISA_m_T1, ISA_m_T2, ISA_m_T3)), na.rm = TRUE),
+    ISAm_LID_total = mean(c_across(c(ISA_m_T1_LID, ISA_m_T2_LID, ISA_m_T3_LID)), na.rm = TRUE),
+    ISAm_Hypokin_total = mean(c_across(c(ISA_m_T1_Hypokin, ISA_m_T2_Hypokin, ISA_m_T3_Hypokin)), na.rm = TRUE)
+  ) %>%
+  ungroup()
 
 # --- 7. Calculate LEDD ---
 df_total <- df_total %>%
@@ -188,5 +223,18 @@ for (i in 1:nrow(df_total)) {
 	}    
   }
 }
+
+# --- 10. Add subscores for ISAm/Hypokinesia and ISAm LID and rename them --- 
+df_total <- df_total %>%
+  rename_with(
+    ~ str_replace(.x, "^ISA_m_(T[0-9]+)_Hypokin$", "ISA_m_Hypokin_\\1"),
+    matches("^ISA_m_T[0-9]+_Hypokin$")
+  )
+
+df_total <- df_total %>%
+  rename_with(
+    ~ str_replace(.x, "^ISA_m_(T[0-9]+)_LID$", "ISA_m_LID_\\1"),
+    matches("^ISA_m_T[0-9]+_LID$")
+  )
 
 

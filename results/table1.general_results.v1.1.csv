@@ -12,6 +12,9 @@
 "MDS-UPDRS part IV (mean (SD))","  5.77 (4.00)","  NaN (NA)","    NA",""
 "LEDD§ [in mg] (mean (SD))","589.93 (361.14)","  NaN (NA)","    NA",""
 "PANDA¶ (mean (SD))"," 23.47 (4.69)","  NaN (NA)","    NA",""
+"BIS-11 (attention factors) (mean (SD))"," 15.40 (2.82)","  NaN (NA)","    NA",""
+"BIS-11 (motor factors) (mean (SD))"," 20.73 (2.64)","  NaN (NA)","    NA",""
+"BIS-11 (non-planning factors) (mean (SD))"," 22.07 (4.33)","  NaN (NA)","    NA",""
 "MMSE** (mean (SD))","   NaN (NA)","29.10 (1.39)","    NA",""
 "MCI = yes (%)","     2 ( 6.7) ","    9 (15.0) "," 0.426",""
-"Abbreviations: * Beck's Depression Inventory-II, † Apathy evaluation scale, ‡ ??, § Levodopa-equivalent dosage, ¶ Parkinson Neuropsychometric Dementia Assessment, ** Mini-Mental State Examination",NA,NA,NA,NA
+"Abbreviations: * Beck Depression Inventory-II; † Apathy Evaluation Scale; ‡ <define MSS here>; § Levodopa equivalent daily dose; ¶ Parkinson Neuropsychometric Dementia Assessment; ** Mini-Mental State Examination",NA,NA,NA,NA
